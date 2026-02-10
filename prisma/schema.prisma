@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+
+enum JobStatus {
+  NEW
+  SHORTLISTED
+  DRAFTED
+  APPLIED
+  INTERVIEW
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum JobSource {
+  MANUAL
+  UPWORK_EMAIL
+  WEB_SEARCH
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  source      JobSource @default(MANUAL)
+  platform    String    @default("Upwork")
+  title       String
+  url         String?
+  description String
+  budget      String?
+  postedAt    DateTime?
+  status      JobStatus @default(NEW)
+  fitScore    Int       @default(0)
+  tags        String?   // comma-separated for MVP
+  notes       String?
+
+  proposals   Proposal[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Proposal {
+  id         String   @id @default(cuid())
+  jobId      String
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  version    Int
+  draftText  String
+  questions  String?
+  pricingNote String?
+  sentAt     DateTime?
+
+  createdAt  DateTime @default(now())
+
+  @@unique([jobId, version])
+}
+
+model PortfolioItem {
+  id        String   @id @default(cuid())
+  name      String
+  urlLive   String
+  urlGithub String?
+  keywords  String   // e.g. "landing,dashboard,geolocation"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
