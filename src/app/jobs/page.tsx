@@ -23,6 +23,12 @@ export default async function JobsPage() {
           <Link href="/import" className="rounded-md border px-4 py-2 text-sm">
             Import Email
           </Link>
+          <Link
+            href="/portfolio"
+            className="rounded-md border px-4 py-2 text-sm"
+          >
+            Portfolio
+          </Link>
         </div>
       </div>
 

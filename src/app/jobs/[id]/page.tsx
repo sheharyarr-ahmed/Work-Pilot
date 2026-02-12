@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { JobStatus } from "@prisma/client";
 import { computeFitScore } from "@/lib/fitscore";
+import { generateProposalDraft } from "@/lib/proposal";
 
 async function updateJob(formData: FormData) {
   "use server";
@@ -43,6 +44,54 @@ async function recalcFitScore(formData: FormData) {
   redirect(`/jobs/${id}`);
 }
 
+async function createProposalDraft(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") || "");
+  const portfolioId = String(formData.get("portfolioId") || "");
+  const timeframe = String(formData.get("timeframe") || "3-5 days");
+
+  if (!jobId) return;
+
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: { proposals: { orderBy: { version: "desc" } } },
+  });
+  if (!job) return;
+
+  const selected = portfolioId
+    ? await prisma.portfolioItem.findUnique({ where: { id: portfolioId } })
+    : null;
+
+  const latestVersion = job.proposals[0]?.version ?? 0;
+  const nextVersion = latestVersion + 1;
+
+  const { draftText, questions, pricingNote } = generateProposalDraft({
+    jobTitle: job.title,
+    jobDescription: job.description,
+    portfolioName: selected?.name ?? "My React UI work",
+    portfolioUrl: selected?.urlLive ?? "",
+    timeframe,
+  });
+
+  await prisma.proposal.create({
+    data: {
+      jobId,
+      version: nextVersion,
+      draftText,
+      questions,
+      pricingNote,
+    },
+  });
+
+  await prisma.job.update({
+    where: { id: jobId },
+    data: { status: "DRAFTED" },
+  });
+
+  redirect(`/jobs/${jobId}`);
+}
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -56,6 +105,10 @@ export default async function JobDetailPage({
   });
 
   if (!job) return notFound();
+
+  const portfolioItems = await prisma.portfolioItem.findMany({
+    orderBy: { createdAt: "desc" },
+  });
 
   const statuses: JobStatus[] = [
     "NEW",
@@ -139,6 +192,43 @@ export default async function JobDetailPage({
               Save Changes
             </button>
           </form>
+          <div className="mt-6 border-t pt-4">
+            <h3 className="mb-2 text-sm font-semibold">
+              Generate Proposal Draft
+            </h3>
+
+            <form action={createProposalDraft} className="flex gap-2">
+              <input type="hidden" name="jobId" value={job.id} />
+
+              <select
+                name="portfolioId"
+                className="rounded-md border px-3 py-2 text-sm"
+                defaultValue={portfolioItems[0]?.id ?? ""}
+              >
+                {portfolioItems.length === 0 ? (
+                  <option value="">No portfolio items yet</option>
+                ) : (
+                  portfolioItems.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))
+                )}
+              </select>
+
+              <input
+                name="timeframe"
+                defaultValue="3-5 days"
+                className="flex-1 rounded-md border px-3 py-2 text-sm"
+                placeholder="e.g. 2-3 days"
+              />
+
+              <button className="rounded-md bg-black px-4 py-2 text-sm text-white">
+                Generate
+              </button>
+            </form>
+          </div>
+
           <form action={recalcFitScore} className="mt-3">
             <input type="hidden" name="id" value={job.id} />
             <button className="w-full rounded-md border px-4 py-2 text-sm">
