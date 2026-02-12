@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { JobStatus } from "@prisma/client";
+import { computeFitScore } from "@/lib/fitscore";
 
 async function updateJob(formData: FormData) {
   "use server";
@@ -15,6 +16,28 @@ async function updateJob(formData: FormData) {
   await prisma.job.update({
     where: { id },
     data: { status, notes },
+  });
+
+  redirect(`/jobs/${id}`);
+}
+
+async function recalcFitScore(formData: FormData) {
+  "use server";
+
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+
+  const job = await prisma.job.findUnique({ where: { id } });
+  if (!job) return;
+
+  const { score, hits } = computeFitScore(job.title, job.description);
+
+  await prisma.job.update({
+    where: { id },
+    data: {
+      fitScore: score,
+      tags: hits.join(","), // reuse existing tags field for now
+    },
   });
 
   redirect(`/jobs/${id}`);
@@ -114,6 +137,12 @@ export default async function JobDetailPage({
 
             <button className="rounded-md bg-black px-4 py-2 text-sm text-white">
               Save Changes
+            </button>
+          </form>
+          <form action={recalcFitScore} className="mt-3">
+            <input type="hidden" name="id" value={job.id} />
+            <button className="w-full rounded-md border px-4 py-2 text-sm">
+              Recalculate Fit Score
             </button>
           </form>
 
