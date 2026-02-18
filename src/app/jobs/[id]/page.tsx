@@ -4,7 +4,16 @@ import { notFound, redirect } from "next/navigation";
 import type { JobStatus } from "@prisma/client";
 import { computeFitScore } from "@/lib/fitscore";
 import { generateProposalDraft } from "@/lib/proposal";
+import { SHORTLIST_THRESHOLD } from "@/lib/shortlist";
 import DraftCard from "./DraftCard";
+
+const terminalOrInProgress: JobStatus[] = [
+  "APPLIED",
+  "INTERVIEW",
+  "WON",
+  "LOST",
+  "ARCHIVED",
+];
 
 async function updateJob(formData: FormData) {
   "use server";
@@ -34,11 +43,18 @@ async function recalcFitScore(formData: FormData) {
 
   const { score, hits } = computeFitScore(job.title, job.description);
 
+  const nextStatus = terminalOrInProgress.includes(job.status)
+    ? job.status
+    : score >= SHORTLIST_THRESHOLD
+      ? "SHORTLISTED"
+      : "NEW";
+
   await prisma.job.update({
     where: { id },
     data: {
       fitScore: score,
-      tags: hits.join(","), // reuse existing tags field for now
+      tags: hits.join(","),
+      status: nextStatus,
     },
   });
 
@@ -85,10 +101,13 @@ async function createProposalDraft(formData: FormData) {
     },
   });
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "DRAFTED" },
-  });
+  // Only set DRAFTED if job is not already in a later state
+  if (!terminalOrInProgress.includes(job.status)) {
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { status: "DRAFTED" },
+    });
+  }
 
   redirect(`/jobs/${jobId}`);
 }
@@ -193,6 +212,14 @@ export default async function JobDetailPage({
               Save Changes
             </button>
           </form>
+
+          <form action={recalcFitScore} className="mt-3">
+            <input type="hidden" name="id" value={job.id} />
+            <button className="w-full rounded-md border px-4 py-2 text-sm">
+              Recalculate Fit Score (Auto-Shortlist)
+            </button>
+          </form>
+
           <div className="mt-6 border-t pt-4">
             <h3 className="mb-2 text-sm font-semibold">
               Generate Proposal Draft
@@ -229,13 +256,6 @@ export default async function JobDetailPage({
               </button>
             </form>
           </div>
-
-          <form action={recalcFitScore} className="mt-3">
-            <input type="hidden" name="id" value={job.id} />
-            <button className="w-full rounded-md border px-4 py-2 text-sm">
-              Recalculate Fit Score
-            </button>
-          </form>
 
           <div className="mt-6 border-t pt-4">
             <h3 className="mb-2 text-sm font-semibold">Proposal Drafts</h3>

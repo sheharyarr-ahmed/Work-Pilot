@@ -1,11 +1,44 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
-export default async function JobsPage() {
-  const jobs = await prisma.job.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 50,
+export default async function JobsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ filter?: string }>;
+}) {
+  const resolvedSearchParams = await searchParams;
+  const filter = resolvedSearchParams?.filter ?? "all";
+
+  const jobsRaw = await prisma.job.findMany({
+    orderBy: [{ fitScore: "desc" }, { createdAt: "desc" }],
+    take: 200,
   });
+
+  const priority: Record<string, number> = {
+    SHORTLISTED: 0,
+    NEW: 1,
+    DRAFTED: 2,
+    APPLIED: 3,
+    INTERVIEW: 4,
+    WON: 5,
+    LOST: 6,
+    ARCHIVED: 7,
+  };
+
+  jobsRaw.sort((a, b) => {
+    const pa = priority[a.status] ?? 99;
+    const pb = priority[b.status] ?? 99;
+    if (pa !== pb) return pa - pb;
+
+    if (a.fitScore !== b.fitScore) return b.fitScore - a.fitScore;
+
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
+
+  const jobs =
+    filter === "shortlisted"
+      ? jobsRaw.filter((j) => j.status === "SHORTLISTED")
+      : jobsRaw;
 
   return (
     <main className="mx-auto max-w-5xl p-6">
@@ -23,6 +56,7 @@ export default async function JobsPage() {
           <Link href="/import" className="rounded-md border px-4 py-2 text-sm">
             Import Email
           </Link>
+
           <Link
             href="/portfolio"
             className="rounded-md border px-4 py-2 text-sm"
@@ -30,6 +64,27 @@ export default async function JobsPage() {
             Portfolio
           </Link>
         </div>
+      </div>
+
+      {/* Filter buttons */}
+      <div className="mb-4 flex gap-2 text-sm">
+        <Link
+          href="/jobs"
+          className={`rounded-md border px-3 py-1 ${
+            filter === "all" ? "bg-black text-white" : ""
+          }`}
+        >
+          All
+        </Link>
+
+        <Link
+          href="/jobs?filter=shortlisted"
+          className={`rounded-md border px-3 py-1 ${
+            filter === "shortlisted" ? "bg-black text-white" : ""
+          }`}
+        >
+          Apply Ready
+        </Link>
       </div>
 
       {jobs.length === 0 ? (
@@ -50,15 +105,33 @@ export default async function JobsPage() {
             </thead>
             <tbody>
               {jobs.map((j) => (
-                <tr key={j.id} className="border-t">
+                <tr
+                  key={j.id}
+                  className={`border-t ${
+                    j.status === "SHORTLISTED" ? "bg-green-50" : ""
+                  }`}
+                >
                   <td className="p-3">
                     <Link href={`/jobs/${j.id}`} className="underline">
                       {j.title}
                     </Link>
                   </td>
+
                   <td className="p-3">{j.platform}</td>
-                  <td className="p-3">{j.status}</td>
+
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <span>{j.status}</span>
+                      {j.status === "SHORTLISTED" ? (
+                        <span className="rounded-full border px-2 py-0.5 text-xs">
+                          Apply Ready
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
+
                   <td className="p-3">{j.fitScore}</td>
+
                   <td className="p-3">
                     {new Date(j.createdAt).toLocaleDateString()}
                   </td>

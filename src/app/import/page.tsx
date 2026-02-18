@@ -2,6 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { parseUpworkEmail } from "@/lib/upworkEmailParser";
 import { computeFitScore } from "@/lib/fitscore";
+import { SHORTLIST_THRESHOLD } from "@/lib/shortlist";
+
+function fingerprint(title: string, description: string) {
+  return `${title}::${description}`.toLowerCase().slice(0, 400);
+}
 
 async function importFromEmail(formData: FormData) {
   "use server";
@@ -14,9 +19,22 @@ async function importFromEmail(formData: FormData) {
   for (const j of parsed) {
     const { score, hits } = computeFitScore(j.title, j.description);
 
-    // create job (avoid duplicates by URL if possible)
+    // Dedup strategy:
+    // 1) if URL exists: dedupe by URL
+    // 2) otherwise: dedupe by fingerprint of title+description
     if (j.url) {
       const existing = await prisma.job.findFirst({ where: { url: j.url } });
+      if (existing) continue;
+    } else {
+      const fp = fingerprint(j.title, j.description);
+      const existing = await prisma.job.findFirst({
+        where: {
+          AND: [
+            { title: j.title },
+            { description: { startsWith: fp.split("::")[1] ?? "" } },
+          ],
+        },
+      });
       if (existing) continue;
     }
 
@@ -29,7 +47,7 @@ async function importFromEmail(formData: FormData) {
         description: j.description,
         fitScore: score,
         tags: hits.join(","),
-        status: "NEW",
+        status: score >= SHORTLIST_THRESHOLD ? "SHORTLISTED" : "NEW",
       },
     });
   }
@@ -43,7 +61,7 @@ export default function ImportPage() {
       <h1 className="text-2xl font-semibold">Import from Upwork Email</h1>
       <p className="mt-2 text-sm text-gray-600">
         Paste the Upwork job alert email content below. We’ll extract jobs and
-        add them to your inbox with an auto Fit Score.
+        add them to your inbox with an auto Fit Score + auto-shortlisting.
       </p>
 
       <form action={importFromEmail} className="mt-6 space-y-4">
