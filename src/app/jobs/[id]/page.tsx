@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import type { JobStatus } from "@prisma/client";
 import { computeFitScore } from "@/lib/fitscore";
 import { generateProposalDraft } from "@/lib/proposal";
+import DraftCard from "./DraftCard";
 
 async function updateJob(formData: FormData) {
   "use server";
@@ -244,17 +245,12 @@ export default async function JobDetailPage({
             ) : (
               <ul className="space-y-2 text-sm">
                 {job.proposals.map((p) => (
-                  <li key={p.id} className="rounded-md border p-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">v{p.version}</span>
-                      <span className="text-gray-600">
-                        {new Date(p.createdAt).toLocaleString()}
-                      </span>
-                    </div>
-                    <pre className="mt-2 whitespace-pre-wrap text-gray-800">
-                      {p.draftText}
-                    </pre>
-                  </li>
+                  <DraftCard
+                    key={p.id}
+                    version={p.version}
+                    createdAt={new Date(p.createdAt).toLocaleString()}
+                    draftText={p.draftText}
+                  />
                 ))}
               </ul>
             )}
