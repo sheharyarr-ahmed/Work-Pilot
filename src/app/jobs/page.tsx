@@ -1,15 +1,24 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import type { Job } from "@prisma/client";
+
+export const dynamic = "force-dynamic";
 
 export default async function JobsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ filter?: string }>;
+  searchParams?: Promise<{ filter?: string | string[] }>;
 }) {
   const resolvedSearchParams = await searchParams;
-  const filter = resolvedSearchParams?.filter ?? "all";
+  const rawFilter = resolvedSearchParams?.filter;
+  const filter =
+    typeof rawFilter === "string"
+      ? rawFilter
+      : Array.isArray(rawFilter)
+      ? rawFilter[0]
+      : "all";
 
-  const jobsRaw = await prisma.job.findMany({
+  const jobsRaw: Job[] = await prisma.job.findMany({
     orderBy: [{ fitScore: "desc" }, { createdAt: "desc" }],
     take: 200,
   });

@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import type { PortfolioItem } from "@prisma/client";
+
+export const dynamic = "force-dynamic";
 
 async function addPortfolioItem(formData: FormData) {
   "use server";
@@ -34,7 +37,7 @@ async function deletePortfolioItem(formData: FormData) {
 }
 
 export default async function PortfolioPage() {
-  const items = await prisma.portfolioItem.findMany({
+  const items: PortfolioItem[] = await prisma.portfolioItem.findMany({
     orderBy: { createdAt: "desc" },
   });
 

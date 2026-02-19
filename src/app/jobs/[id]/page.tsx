@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import type { JobStatus } from "@prisma/client";
+import type { JobStatus, PortfolioItem, Proposal } from "@prisma/client";
 import { computeFitScore } from "@/lib/fitscore";
 import { generateProposalDraft } from "@/lib/proposal";
 import { SHORTLIST_THRESHOLD } from "@/lib/shortlist";
@@ -112,6 +112,20 @@ async function createProposalDraft(formData: FormData) {
   redirect(`/jobs/${jobId}`);
 }
 
+async function markAsApplied(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") || "");
+  if (!jobId) return;
+
+  await prisma.job.update({
+    where: { id: jobId },
+    data: { status: "APPLIED" },
+  });
+
+  redirect(`/jobs/${jobId}`);
+}
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -203,7 +217,7 @@ export default async function JobDetailPage({
               <textarea
                 name="notes"
                 defaultValue={job.notes ?? ""}
-                className="min-h-[140px] w-full rounded-md border px-3 py-2 text-sm"
+                className="min-h-35 w-full rounded-md border px-3 py-2 text-sm"
                 placeholder="Add notes about this job..."
               />
             </div>
@@ -236,7 +250,7 @@ export default async function JobDetailPage({
                 {portfolioItems.length === 0 ? (
                   <option value="">No portfolio items yet</option>
                 ) : (
-                  portfolioItems.map((p) => (
+                  portfolioItems.map((p: PortfolioItem) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
                     </option>
@@ -264,12 +278,14 @@ export default async function JobDetailPage({
               <p className="text-sm text-gray-600">No drafts yet.</p>
             ) : (
               <ul className="space-y-2 text-sm">
-                {job.proposals.map((p) => (
+                {job.proposals.map((p: Proposal) => (
                   <DraftCard
                     key={p.id}
+                    jobId={job.id}
                     version={p.version}
                     createdAt={new Date(p.createdAt).toLocaleString()}
                     draftText={p.draftText}
+                    markAsApplied={markAsApplied}
                   />
                 ))}
               </ul>
